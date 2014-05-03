@@ -14,36 +14,34 @@ object ProjectSetting {
   import org.ensime.sbt.KeyMap
   import scala.util.parsing.input.CharSequenceReader
 
-  def fromEnsime(source:Source):Option[ProjectSetting] = {
+  def fromEnsime(source:Source):Either[String, ProjectSetting] = {
     import SExp.key
-    def keywordMap(sexp:SExp):Option[KeyMap] =  sexp match { case l:SExpList => Some(l.toKeywordMap) case _ => None }
+    def keywordMap(sexp:SExp):Either[String, KeyMap] =  sexp match { case l:SExpList => Right(l.toKeywordMap) case s => Left(s"Not List: ${s.toReadableString}") }
     for {
-      ensime:KeyMap <- keywordMap(SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n"))))
-      project:KeyMap <- ensime.get(key(":subprojects")) match { case Some(a) => keywordMap(a) case _ => None }
-      compile_deps:Seq[String] <- project.get(key(":compile-deps")) match {
-        case Some(l:SExpList) => Some(l.toSeq.flatMap { _ match { case s:StringAtom => Seq(s.value) case _ => Seq() } })
-        case _ => None
-      }
+      ensime <- keywordMap(SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n")))).right
+      project <- (ensime.get(key(":subprojects")) match { case Some(a) => keywordMap(a) case None => Left(":subprojects not found") }).right
+      compileDeps <- (project.get(key(":compile-deps")) match {
+        case Some(l:SExpList) => Right(l.toSeq.flatMap { _ match { case s:StringAtom => Seq(s.value) case _ => Seq() } })
+        case _ => Left("invalid :compile-deps")
+      }).right
     } yield {
-      new ProjectSetting(
-        classPath = Seq()
-      )
+      new ProjectSetting(classPath = compileDeps)
     }
   }
 }
 
 
 class Project(root: String, setting:ProjectSetting) {
-  lazy val nscSettings:Settings = new Settings()
-  nscSettings.processArguments(List("-classpath", "/Users/ariyamizutani/.sbt/0.12.4/boot/scala-2.10.4/lib/scala-library.jar:/Users/ariyamizutani/projects/scams/target/scala-2.10/classes:/Users/ariyamizutani/.sbt/0.12.4/boot/scala-2.10.4/lib/scala-compiler.jar:/Users/ariyamizutani/.ivy2/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.10.4.jar"), true)
+  val nscSettings:Settings = new Settings()
+  nscSettings.processArguments(List("-classpath", setting.classPath.mkString(":")), true)
   val global:Global = new Global(nscSettings, new ConsoleReporter(nscSettings))
 }
 
 object Project {
   import scala.io.Source
-  def load(root:String):Option[Project] = {
+  def load(root:String):Either[String, Project] = {
     for {
-      setting <- ProjectSetting.fromEnsime(Source.fromFile(s"$root/.ensime"))
+      setting <- ProjectSetting.fromEnsime(Source.fromFile(s"$root/.ensime")).right
     } yield {
       new Project(root, setting)
     }
@@ -52,7 +50,7 @@ object Project {
 
 object Main {
   def main(args: Array[String]): Unit = {
-    val project = Project.load(".") match { case Some(p) => p; case None => throw new RuntimeException("load failed") }
+    val project = Project.load(".") match { case Right(p) => p; case Left(msg) => throw new RuntimeException(s"load failed: $msg") }
     val sourceFile:SourceFile = project.global.getSourceFile("./src/main/scala/Project.scala")
     val response : Response[project.global.Tree] = new Response()
   }
