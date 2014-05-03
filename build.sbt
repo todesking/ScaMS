@@ -4,3 +4,5 @@ libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-library" % "2.10.4" % "compile;runtime"
 )
 
+scalacOptions ++= Seq(
+)

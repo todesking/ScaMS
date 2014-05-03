@@ -19,7 +19,7 @@ object ProjectSetting {
     def keywordMap(sexp:SExp):Either[String, KeyMap] =  sexp match { case l:SExpList => Right(l.toKeywordMap) case s => Left(s"Not List: ${s.toReadableString}") }
     for {
       ensime <- keywordMap(SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n")))).right
-      project <- (ensime.get(key(":subprojects")) match { case Some(a) => keywordMap(a) case None => Left(":subprojects not found") }).right
+      project <- (ensime.get(key(":subprojects")) match { case Some(l:SExpList) => l.headOption match {case Some(a) => keywordMap(a) case None => Left(":subprojects is empty")} case _ => Left(":subprojects error") }).right
       compileDeps <- (project.get(key(":compile-deps")) match {
         case Some(l:SExpList) => Right(l.toSeq.flatMap { _ match { case s:StringAtom => Seq(s.value) case _ => Seq() } })
         case _ => Left("invalid :compile-deps")
