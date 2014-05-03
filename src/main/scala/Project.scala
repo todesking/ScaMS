@@ -10,17 +10,20 @@ class ProjectSetting(
 
 object ProjectSetting {
   import scala.io.Source
-  import org.ensime.sbt.util.{SExp, SExpList}
+  import org.ensime.sbt.util.{SExp, SExpList, StringAtom}
   import org.ensime.sbt.KeyMap
   import scala.util.parsing.input.CharSequenceReader
 
   def fromEnsime(source:Source):Option[ProjectSetting] = {
+    import SExp.key
+    def keywordMap(sexp:SExp):Option[KeyMap] =  sexp match { case l:SExpList => Some(l.toKeywordMap) case _ => None }
     for {
-      ensime:KeyMap <-
-        SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n"))) match {
-            case l:SExpList => Some(l.toKeywordMap)
-            case _ => None
-        }
+      ensime:KeyMap <- keywordMap(SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n"))))
+      project:KeyMap <- ensime.get(key(":subprojects")) match { case Some(a) => keywordMap(a) case _ => None }
+      compile_deps:Seq[String] <- project.get(key(":compile-deps")) match {
+        case Some(l:SExpList) => Some(l.toSeq.flatMap { _ match { case s:StringAtom => Seq(s.value) case _ => Seq() } })
+        case _ => None
+      }
     } yield {
       new ProjectSetting(
         classPath = Seq()
