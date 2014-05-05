@@ -1,3 +1,5 @@
+package scams
+
 import scala.tools.nsc.{Settings}
 import scala.tools.nsc.interactive.{Global}
 import scala.tools.nsc.interactive.{Response}
