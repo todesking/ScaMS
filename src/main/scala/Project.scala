@@ -61,8 +61,27 @@ object Project {
 object Main {
   def main(args: Array[String]): Unit = {
     val project = Project.load(".") match { case Right(p) => p; case Left(msg) => throw new RuntimeException(s"load failed: $msg") }
-    val sourceFile:SourceFile = project.global.getSourceFile("./src/main/scala/Project.scala")
-    val response : Response[project.global.Tree] = new Response()
+
+    processCommand(project)
+
     project.shutdown()
+  }
+
+  def processCommand(project:Project):Unit = {
+    print(">> ")
+    val line = readLine
+    if(line == null || line == "exit") {
+      return
+    }
+
+    line.split("""\s+""") match {
+      case Array() =>
+      case Array("type", name) => {
+        println(project.global.mirrorThatLoaded(null).staticClass(name))
+      }
+      case _ => println("What?")
+    }
+
+    processCommand(project)
   }
 }
