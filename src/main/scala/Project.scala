@@ -77,7 +77,7 @@ object Main {
     line.split("""\s+""") match {
       case Array() =>
       case Array("type", name) => {
-        println(project.global.mirrorThatLoaded(null).staticClass(name))
+        println(project.global.ask { () => project.global.rootMirror.staticClass(name) })
       }
       case _ => println("What?")
     }
