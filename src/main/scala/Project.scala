@@ -1,10 +1,5 @@
 package scams
 
-import scala.tools.nsc.{Settings}
-import scala.tools.nsc.interactive.{Global}
-import scala.tools.nsc.interactive.{Response}
-import scala.tools.nsc.reporters.ConsoleReporter
-import scala.reflect.internal.util.{SourceFile, OffsetPosition}
 
 class ProjectSetting(
   val classPath: Seq[String]
@@ -12,12 +7,15 @@ class ProjectSetting(
 
 object ProjectSetting {
   import scala.io.Source
-  import org.ensime.sbt.util.{SExp, SExpList, StringAtom}
-  import org.ensime.sbt.KeyMap
-  import scala.util.parsing.input.CharSequenceReader
 
   def fromEnsime(source:Source):Either[String, ProjectSetting] = {
+    import org.ensime.sbt.KeyMap
+    import org.ensime.sbt.util.{SExp, SExpList, StringAtom}
+    import scala.util.parsing.input.CharSequenceReader
+    import scala.tools.nsc.interactive.{Global}
+    import scala.reflect.internal.util.{SourceFile, OffsetPosition}
     import SExp.key
+
     def keywordMap(sexp:SExp):Either[String, KeyMap] =  sexp match { case l:SExpList => Right(l.toKeywordMap) case s => Left(s"Not List: ${s.toReadableString}") }
     for {
       ensime <- keywordMap(SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n")))).right
@@ -40,8 +38,13 @@ object ProjectSetting {
 
 
 class Project(root: String, setting:ProjectSetting) {
+  import scala.tools.nsc.interactive.{Global}
+  import scala.tools.nsc.{Settings}
+  import scala.tools.nsc.reporters.ConsoleReporter
+
   val nscSettings:Settings = new Settings()
   nscSettings.processArguments(List("-classpath", setting.classPath.mkString(":")), true)
+
   val global:Global = new Global(nscSettings, new ConsoleReporter(nscSettings))
 
   def shutdown():Unit = global.askShutdown()
