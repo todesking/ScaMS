@@ -1,8 +1,9 @@
 package scams
 
 
-class ProjectSetting(
-  val classPath: Seq[String]
+case class ProjectSetting(
+  val classPath: Seq[String],
+  val sourceRoots: Seq[String]
 )
 
 object ProjectSetting {
@@ -17,6 +18,10 @@ object ProjectSetting {
     import SExp.key
 
     def keywordMap(sexp:SExp):Either[String, KeyMap] =  sexp match { case l:SExpList => Right(l.toKeywordMap) case s => Left(s"Not List: ${s.toReadableString}") }
+    def toStringSeq(sexp:Option[SExp]):Either[String, Seq[String]] = sexp match {
+      case Some(l:SExpList) => Right(l.toSeq.flatMap { _ match { case s:StringAtom => Seq(s.value) case _ => Seq() } })
+      case _ => Left("invalid :compile-deps")
+    }
     for {
       ensime <- keywordMap(SExp.read(new CharSequenceReader(source.getLines().filter(!_.startsWith(";;")).mkString("\n")))).right
       project <- (ensime.get(key(":subprojects")) match {
@@ -26,18 +31,19 @@ object ProjectSetting {
         }
         case _ => Left(":subprojects error")
       }).right
-      compileDeps <- (project.get(key(":compile-deps")) match {
-        case Some(l:SExpList) => Right(l.toSeq.flatMap { _ match { case s:StringAtom => Seq(s.value) case _ => Seq() } })
-        case _ => Left("invalid :compile-deps")
-      }).right
+      compileDeps <- toStringSeq(project.get(key(":compile-deps"))).right
+      sourceRoots <- toStringSeq(project.get(key(":source-roots"))).right
     } yield {
-      new ProjectSetting(classPath = compileDeps)
+      new ProjectSetting(
+        classPath = compileDeps,
+        sourceRoots = sourceRoots
+      )
     }
   }
 }
 
 
-class Project(root: String, setting:ProjectSetting) {
+case class Project(root: String, setting:ProjectSetting) {
   import scala.tools.nsc.interactive.{Global}
   import scala.tools.nsc.{Settings}
   import scala.tools.nsc.reporters.ConsoleReporter
@@ -64,6 +70,8 @@ object Project {
 object Main {
   def main(args: Array[String]): Unit = {
     val project = Project.load(".") match { case Right(p) => p; case Left(msg) => throw new RuntimeException(s"load failed: $msg") }
+
+    println(s"loaded: ${project}")
 
     processCommand(project)
 
